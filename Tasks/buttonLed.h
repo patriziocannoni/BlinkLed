@@ -9,6 +9,5 @@
 #define BUTTONLED_H_
 
 void inicializarButtonLed(void);
-void executarTarefaButtonLed(void);
 
 #endif /* BUTTONLED_H_ */

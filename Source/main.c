@@ -6,23 +6,19 @@
  */
 
 #include <avr/interrupt.h>
-#include <timer.h>
 #include <blinkLed.h>
 #include <buttonLed.h>
+#include <task.h>
 
 int main(void) {
 	cli();          			// disable global interrupts
 
-	inicializarTimer();
 	inicializarLed();
 	inicializarButtonLed();
 
 	sei();          			// enable global interrupts
 
-	for (;;) {
-		executarTarefaBlinkLed();
-		executarTarefaButtonLed();
-	}
+	vTaskStartScheduler();
 
 	return 0;
 }

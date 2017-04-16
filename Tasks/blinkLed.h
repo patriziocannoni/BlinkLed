@@ -9,6 +9,5 @@
 #define BLINK_LED_H_
 
 void inicializarLed(void);
-void executarTarefaBlinkLed(void);
 
 #endif /* BLINK_LED_H_ */

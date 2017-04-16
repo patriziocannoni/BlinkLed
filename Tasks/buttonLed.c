@@ -9,19 +9,24 @@
 #include <stdlib.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
-#include <timer.h>
+#include <FreeRTOS.h>
+#include <task.h>
+#include <semphr.h>
+#include <queue.h>
 #include "buttonLed.h"
 
 #define BUTTON_D2_PRESSED() !(PIND & _BV(PORTD2))
 
-static TIMER timer_;
-static unsigned char estado_;
+//static unsigned char estado_;
 static uint8_t button_ = 0;
+static xSemaphoreHandle xSemaphore;
 
-enum {
-	BUTTON_IRQ_TRIGGER,
-	BUTTON_READ
-};
+static void executarTarefaButtonLed(void *arg);
+
+//enum {
+//	BUTTON_IRQ_TRIGGER,
+//	BUTTON_READ
+//};
 
 void inicializarButtonLed(void) {
 	DDRD |= _BV(DDD7);			// set pin 7 of PORTD for output
@@ -35,35 +40,66 @@ void inicializarButtonLed(void) {
 	EICRA |= (1<<ISC01)|(0<<ISC00)|(1<<ISC11)|(0<<ISC10);
 	EIMSK |= _BV(INT0);     	// Turns on INT0
 
-	timer_start(&timer_);
-	estado_ = BUTTON_READ;
+	vSemaphoreCreateBinary(xSemaphore);
+
+	if (xSemaphore != NULL) {
+		xTaskCreate(executarTarefaButtonLed, (signed portCHAR *) "Handler", configMINIMAL_STACK_SIZE, NULL, 3, NULL);
+	}
+
+//	estado_ = BUTTON_READ;
 }
 
-void executarTarefaButtonLed(void) {
-	switch (estado_) {
-		case BUTTON_IRQ_TRIGGER:
-			if (timer_check(timer_, 15)) {
-				if (BUTTON_D2_PRESSED()) {
-					if (!button_) {
-						PORTD |= _BV(PORTD7);
-						button_ = 1;
-					} else {
-						PORTD &= ~_BV(PORTD7);
-						button_ = 0;
-					}
-					estado_ = BUTTON_READ;
-				}
-				EIMSK |= _BV(INT0);     	// Turns on INT0
-			}
-			break;
+static void executarTarefaButtonLed(void *arg) {
 
-		case BUTTON_READ:
-			break;
+	for (;;) {
+		xSemaphoreTake(xSemaphore, portMAX_DELAY);
+
+		vTaskDelay(15);
+
+		if (BUTTON_D2_PRESSED()) {
+			if (!button_) {
+				PORTD |= _BV(PORTD7);
+				button_ = 1;
+			} else {
+				PORTD &= ~_BV(PORTD7);
+				button_ = 0;
+			}
+		}
+
+		EIMSK |= _BV(INT0);     	// Turns on INT0
 	}
+
+
+//	switch (estado_) {
+//		case BUTTON_IRQ_TRIGGER:
+//			if (timer_check(timer_, 15)) {
+//				if (BUTTON_D2_PRESSED()) {
+//					if (!button_) {
+//						PORTD |= _BV(PORTD7);
+//						button_ = 1;
+//					} else {
+//						PORTD &= ~_BV(PORTD7);
+//						button_ = 0;
+//					}
+//					estado_ = BUTTON_READ;
+//				}
+//				EIMSK |= _BV(INT0);     	// Turns on INT0
+//			}
+//			break;
+//
+//		case BUTTON_READ:
+//			break;
+//	}
 }
 
 ISR(INT0_vect) {
-	estado_ = BUTTON_IRQ_TRIGGER;
-	EIMSK |= 0;     	// Turns off INT0
-	timer_start(&timer_);
+	static portBASE_TYPE xHigherPriorityTaskWoken;
+	xHigherPriorityTaskWoken = pdFALSE;
+
+	xSemaphoreGiveFromISR(xSemaphore, &xHigherPriorityTaskWoken);
+
+	if (xHigherPriorityTaskWoken == pdTRUE) {
+		EIMSK |= 0;     	// Turns off INT0
+	}
+
 }
